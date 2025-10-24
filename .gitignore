@@ -1,0 +1,8 @@
+**/__pycache__/
+**/node_modules/
+**/media/
+**/logs/
+.env*
+*.sqlite3
+postgres_data/
+staticfiles/
