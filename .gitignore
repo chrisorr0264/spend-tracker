@@ -6,3 +6,5 @@
 *.sqlite3
 postgres_data/
 staticfiles/
+prod/.env
+**/frontend-dist/
