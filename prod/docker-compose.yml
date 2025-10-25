@@ -11,15 +11,21 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     env_file: .env
-    command: >
-      bash -lc "python manage.py collectstatic --noinput &&
-                python manage.py migrate &&
-                gunicorn config.wsgi:application -b 0.0.0.0:8000 --workers 3 --timeout 120"
     volumes:
       - static_volume:/app/staticfiles
       - media_volume:/app/media
     depends_on: [db]
     restart: unless-stopped
+    command:
+      - bash
+      - -lc
+      - >
+        until (echo > /dev/tcp/$POSTGRES_HOST/$POSTGRES_PORT) >/dev/null 2>&1; do
+          echo 'Waiting for DB...'; sleep 2;
+        done;
+        python manage.py collectstatic --noinput &&
+        python manage.py migrate &&
+        python -m gunicorn config.wsgi:application -b 0.0.0.0:8000 --workers 3 --timeout 120
 
   frontend:
     image: node:20-alpine
@@ -37,7 +43,7 @@ services:
       - static_volume:/var/www/static:ro
       - media_volume:/var/www/media:ro
     ports:
-      - "8080:80"
+      - "8082:80"
     restart: unless-stopped
 
 volumes:

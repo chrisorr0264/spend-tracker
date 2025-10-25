@@ -2,7 +2,7 @@
 // frontend/src/App.jsx
 // =====================
 import React, { useEffect, useMemo, useState } from 'react'
-import { primeCSRF, login, logout, getSummary, listExpenses, listSettlements, addExpense, addSettlement } from './api'
+import { primeCSRF, login, logout, getSummary, listExpenses, listSettlements, addExpense, addSettlement, whoami } from './api'
 
 
 // ---- helpers ----
@@ -45,7 +45,7 @@ function Tabs({ value, onChange, items }) {
 // ---- Currency Select with "Recent 5" ----
 const DEFAULT_CURRENCIES = ['CAD','USD','THB','JPY','EUR','GBP','AUD','NZD','SGD','PHP','VND','IDR'];
 
-function CurrencySelect({ value, onChange, all = DEFAULT_CURRENCIES }) {
+function CurrencySelect({ value, onChange, all = DEFAULT_CURRENCIES, canWrite = false }) {
   const [recent, setRecent] = useState([]);
 
   useEffect(() => {
@@ -65,18 +65,19 @@ function CurrencySelect({ value, onChange, all = DEFAULT_CURRENCIES }) {
   const handleChange = async (e) => {
     const code = e.target.value;
     onChange(code);
-    // fire-and-forget to pin to recent list
-    try {
-      await fetch('/api/recent-currencies/', {
-        method: 'POST',
+    if (canWrite) {
+      try {
+        await fetch('/api/recent-currencies/', {
+          method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-CSRFToken': getCookie('csrftoken') || ''     // ← include CSRF
+            'X-CSRFToken': getCookie('csrftoken') || ''
           },
-        credentials: 'include',
-        body: JSON.stringify({ code }),
-      });
-    } catch {}
+          credentials: 'include',
+          body: JSON.stringify({ code }),
+        });
+      } catch {}
+    }
   };
 
   const recentPinned = recent.filter(c => all.includes(c));
@@ -205,7 +206,7 @@ function SummaryCard({ data }) {
 }
 
 // ---- Add Expense (tabs + dropdowns + auto-FX + paid-by + weights grid) ----
-function AddExpense({ onAdded }) {
+function AddExpense({ onAdded, isStaff }) {
   const today = new Date().toISOString().slice(0,10)
   const [f, setF] = useState({
     date: today,
@@ -285,7 +286,7 @@ function AddExpense({ onAdded }) {
 
         <div>
           <label>Currency</label>
-          <CurrencySelect value={f.currency} onChange={(val)=>setF({...f, currency: val})} />
+          <CurrencySelect value={f.currency} onChange={(val)=>setF({...f, currency: val})} canWrite={isStaff} />
         </div>
         <div>
           <label className="flex items-center justify-between">
@@ -324,7 +325,7 @@ function AddExpense({ onAdded }) {
 }
 
 // ---- Add Settlement (unchanged fields; left here, but shown on its own tab) ----
-function AddSettlement({ onAdded }) {
+function AddSettlement({ onAdded, isStaff }) {
   const [people, setPeople] = useState([]);
   const [f, setF] = useState({
     date: new Date().toISOString().slice(0,10),
@@ -419,6 +420,7 @@ function AddSettlement({ onAdded }) {
 // ---- App Root ----
 export default function App() {
   const [authed, setAuthed] = useState(document.cookie.includes('sessionid='))
+  const [me, setMe] = useState(null) // { authenticated, username, is_staff }
   const [summary, setSummary] = useState(null)
   const [expenses, setExpenses] = useState([])
   const [settlements, setSettlements] = useState([])
@@ -448,6 +450,21 @@ export default function App() {
 
   useEffect(() => { if (authed) refreshAll() }, [authed])
 
+  // fetch whoami after login
+  useEffect(() => {
+    if (!authed) return;
+    (async () => {
+        try {
+        const data = await whoami();
+        setMe(data);
+      } catch {
+        setMe(null);
+        }
+    })();
+  }, [authed]);
+
+  const isStaff = !!me?.is_staff;
+
   if (!authed) {
     return (
       <div className="min-h-screen bg-gray-50 p-4">
@@ -464,7 +481,15 @@ export default function App() {
         <h1 className="text-2xl font-bold">Thailand Spend Tracker</h1>
         <div className="flex items-center gap-2">
           <Button onClick={refreshAll}>Refresh</Button>
-          <Button onClick={logout}>Logout</Button>
+          <Button onClick={async () => {
+            try { await logout(); } finally {
+              setMe(null);
+              setAuthed(false);
+              setTab('summary');
+              // optional hard refresh if you want to wipe all component state:
+              // window.location.reload();
+            }
+          }}>Logout</Button>
         </div>
       </div>
 
@@ -514,17 +539,18 @@ export default function App() {
               </div>
             )
           },
-          {
+          ...(isStaff ? [{
             value: 'add-expense',
             label: 'Add Expense',
-            content: <AddExpense onAdded={refreshAll} />
+            content: <AddExpense onAdded={refreshAll} isStaff={isStaff} />
           },
           {
             value: 'add-settlement',
             label: 'Add Settlement',
-            content: <AddSettlement onAdded={refreshAll} />
-          }
-        ]}
+            content: <AddSettlement onAdded={refreshAll} isStaff={isStaff} />
+          }] : [])
+        ]} 
+
       />
 
       <div className="fixed bottom-3 left-0 right-0 px-4">

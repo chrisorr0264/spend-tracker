@@ -21,6 +21,12 @@ export const api = axios.create({
   withCredentials: true,
 })
 
+export async function whoami() {
+  const r = await fetch('/api/whoami/', { credentials: 'include' });
+  if (!r.ok) throw new Error('whoami failed');
+  return r.json(); // { authenticated, username?, is_staff? }
+}
+
 // --- ensure csrftoken exists once, before first mutating call
 let csrfPrimed = false
 export async function primeCSRF() {
