@@ -93,3 +93,8 @@ export const listExpenses = () => api.get('/expenses/')
 export const listSettlements = () => api.get('/settlements/')
 export const addExpense = (payload) => api.post('/expenses/', payload)
 export const addSettlement = (payload) => api.post('/settlements/', payload)
+
+export const getExpense = (id) => api.get(`/expenses/${id}/`)
+export const updateExpense = (id, payload, { partial = true } = {}) =>
+  (partial ? api.patch(`/expenses/${id}/`, payload) : api.put(`/expenses/${id}/`, payload))
+export const deleteExpense = (id) => api.delete(`/expenses/${id}/`)
